@@ -1,39 +1,223 @@
--- ServerScriptService/CodesService.server.lua
+-- Solo Hunter Auto Redeem (Fixed & Toggle Version)
+-- Tested for Delta Executor
 
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local DataStoreService = game:GetService("DataStoreService")
+local CoreGui = game:GetService("CoreGui")
 
--- Buat folder/struktur RemoteFunction (kalau belum ada)
-local RemoteServices = ReplicatedStorage:FindFirstChild("RemoteServices") or Instance.new("Folder")
-RemoteServices.Name = "RemoteServices"
-RemoteServices.Parent = ReplicatedStorage
-
-local CodesService = RemoteServices:FindFirstChild("CodesService") or Instance.new("Folder")
-CodesService.Name = "CodesService"
-CodesService.Parent = RemoteServices
-
-local RF = CodesService:FindFirstChild("RF") or Instance.new("Folder")
-RF.Name = "RF"
-RF.Parent = CodesService
-
-local RedeemCode = RF:FindFirstChild("RedeemCode") or Instance.new("RemoteFunction")
-RedeemCode.Name = "RedeemCode"
-RedeemCode.Parent = RF
-
--- Kode & reward (contoh; ganti reward sesuai game kamu)
-local VALID_CODES = {
-	["40KCCUTHANKS66"] = true,
-	["TOTHEMOON"] = true,
-	["35KCCUTHANKS33"] = true,
-	["LOVETOBRAZIL"] = true,
-	["WWWW"] = true,
-	["30KCCU"] = true,
-	["CLASSREROLL"] = true,
-	["RESETMYSTATS"] = true,
-	["THANKSFORTHELIKESGUYS"] = true,
-	["RELEASE"] = true,
+local CODES = {
+    "40KCCUTHANKS66",
+    "TOTHEMOON",
+    "35KCCUTHANKS33",
+    "LOVETOBRAZIL",
+    "WWWW",
+    "30KCCU",
+    "CLASSREROLL",
+    "RESETMYSTATS",
+    "THANKSFORTHELIKESGUYS",
+    "RELEASE"
 }
 
+-- Variabel kontrol
+local isRunning = false
+local stopRequest = false
+
+-- --- FUNGSI GUI ---
+
+-- Hapus GUI lama jika ada (biar gak numpuk pas execute ulang)
+if CoreGui:FindFirstChild("SoloHunterRedeem") then
+    CoreGui.SoloHunterRedeem:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SoloHunterRedeem"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = CoreGui
+
+-- Frame Utama
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 200, 0, 100)
+MainFrame.Position = UDim2.new(0.5, -100, 0, 50) -- Muncul di tengah atas
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true -- Bisa digeser
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.Parent = MainFrame
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(60, 60, 70)
+UIStroke.Thickness = 1.5
+UIStroke.Parent = MainFrame
+
+-- Judul
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Position = UDim2.new(0, 0, 0, 5)
+Title.BackgroundTransparency = 1
+Title.Text = "Auto Redeem"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+-- Status Label
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 20)
+StatusLabel.Position = UDim2.new(0, 0, 0, 30)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Status: Idle"
+StatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+StatusLabel.TextSize = 11
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.Parent = MainFrame
+
+-- Tombol Toggle ON/OFF
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 160, 0, 35)
+ToggleButton.Position = UDim2.new(0.5, -80, 0, 55)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 65) -- Warna awal (OFF)
+ToggleButton.Text = "OFF"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 14
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.Parent = MainFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 8)
+BtnCorner.Parent = ToggleButton
+
+-- Fungsi Notifikasi (Muncul di kanan layar)
+local function sendNotification(title, msg, isSuccess)
+    local NotifFrame = Instance.new("Frame")
+    NotifFrame.Size = UDim2.new(0, 250, 0, 60)
+    NotifFrame.Position = UDim2.new(1, 260, 0.8, 0) -- Mulai dari luar layar kanan
+    NotifFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    NotifFrame.BorderSizePixel = 0
+    NotifFrame.Parent = ScreenGui
+    
+    local NCorner = Instance.new("UICorner")
+    NCorner.CornerRadius = UDim.new(0, 8)
+    NCorner.Parent = NotifFrame
+    
+    local Bar = Instance.new("Frame")
+    Bar.Size = UDim2.new(0, 4, 1, 0)
+    Bar.BackgroundColor3 = isSuccess and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
+    Bar.BorderSizePixel = 0
+    Bar.Parent = NotifFrame
+    
+    local NTitle = Instance.new("TextLabel")
+    NTitle.Size = UDim2.new(1, -15, 0, 20)
+    NTitle.Position = UDim2.new(0, 12, 0, 8)
+    NTitle.BackgroundTransparency = 1
+    NTitle.Text = title
+    NTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NTitle.TextSize = 14
+    NTitle.Font = Enum.Font.GothamBold
+    NTitle.TextXAlignment = Enum.TextXAlignment.Left
+    NTitle.Parent = NotifFrame
+
+    local NMsg = Instance.new("TextLabel")
+    NMsg.Size = UDim2.new(1, -15, 0, 20)
+    NMsg.Position = UDim2.new(0, 12, 0, 30)
+    NMsg.BackgroundTransparency = 1
+    NMsg.Text = msg
+    NMsg.TextColor3 = Color3.fromRGB(200, 200, 200)
+    NMsg.TextSize = 12
+    NMsg.Font = Enum.Font.Gotham
+    NMsg.TextXAlignment = Enum.TextXAlignment.Left
+    NMsg.Parent = NotifFrame
+    
+    -- Animasi Masuk
+    TweenService:Create(NotifFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {Position = UDim2.new(1, -260, 0.8, 0)}):Play()
+    
+    -- Animasi Keluar
+    task.delay(4, function()
+        local out = TweenService:Create(NotifFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {Position = UDim2.new(1, 260, 0.8, 0)})
+        out:Play()
+        out.Completed:Wait()
+        NotifFrame:Destroy()
+    end)
+end
+
+-- --- LOGIC REDEEM ---
+
+local function startRedeem()
+    isRunning = true
+    stopRequest = false
+    
+    -- Ubah tampilan tombol jadi ON
+    ToggleButton.Text = "ON"
+    TweenService:Create(ToggleButton, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(0, 200, 100)}):Play()
+    
+    local Remote
+    
+    -- Mencari remote dengan timeout (biar gak stuck loading selamanya)
+    local success, _ = pcall(function()
+        Remote = ReplicatedStorage:WaitForChild("RemoteServices", 2)
+            and ReplicatedStorage.RemoteServices:WaitForChild("CodesService", 2)
+            and ReplicatedStorage.RemoteServices.CodesService:WaitForChild("RF", 2)
+            and ReplicatedStorage.RemoteServices.CodesService.RF:WaitForChild("RedeemCode", 2)
+    end)
+    
+    if not Remote then
+        StatusLabel.Text = "Error: Remote tidak ketemu!"
+        ToggleButton.Text = "OFF"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+        isRunning = false
+        return
+    end
+
+    local successCount = 0
+    
+    for i, code in ipairs(CODES) do
+        if stopRequest then
+            StatusLabel.Text = "Diberhentikan!"
+            break 
+        end
+        
+        StatusLabel.Text = "Redeeming: " .. code .. " ("..i.."/"..#CODES..")"
+        
+        -- Eksekusi Remote
+        pcall(function()
+            Remote:InvokeServer(code)
+        end)
+        
+        successCount = successCount + 1
+        task.wait(0.2) -- Delay sedikit biar halus
+    end
+
+    -- Selesai atau Berhenti
+    isRunning = false
+    ToggleButton.Text = "OFF"
+    TweenService:Create(ToggleButton, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(60, 60, 65)}):Play()
+    
+    if stopRequest then
+        StatusLabel.Text = "Status: Berhenti"
+    else
+        StatusLabel.Text = "Status: Selesai!"
+        -- Notif hanya muncul jika selesai semua tanpa di-stop
+        sendNotification("SUKSES!", "Berhasil redeem " .. successCount .. " kode.", true)
+    end
+end
+
+-- Event Handler Tombol
+ToggleButton.MouseButton1Click:Connect(function()
+    if isRunning then
+        -- Jika sedang jalan, matikan (OFF)
+        stopRequest = true
+        ToggleButton.Text = "Stopping..."
+        TweenService:Create(ToggleButton, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(200, 150, 50)}):Play()
+    else
+        -- Jika mati, nyalakan (ON)
+        task.spawn(startRedeem)
+    end
+end)
 local RedeemedStore = DataStoreService:GetDataStore("RedeemedCodes_v1")
 
 local function getRedeemed(userId)
