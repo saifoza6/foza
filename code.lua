@@ -1,39 +1,81 @@
--- Solo Hunter Auto Redeem Script
--- Dibuat untuk Delta Executor
+-- ServerScriptService/CodesService.server.lua
 
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local DataStoreService = game:GetService("DataStoreService")
 
--- Daftar kode redeem
-local codes = {
-    "40KCCUTHANKS66",
-    "TOTHEMOON",
-    "35KCCUTHANKS33",
-    "LOVETOBRAZIL",
-    "WWWW",
-    "30KCCU",
-    "CLASSREROLL",
-    "RESETMYSTATS",
-    "THANKSFORTHELIKESGUYS",
-    "RELEASE"
+-- Buat folder/struktur RemoteFunction (kalau belum ada)
+local RemoteServices = ReplicatedStorage:FindFirstChild("RemoteServices") or Instance.new("Folder")
+RemoteServices.Name = "RemoteServices"
+RemoteServices.Parent = ReplicatedStorage
+
+local CodesService = RemoteServices:FindFirstChild("CodesService") or Instance.new("Folder")
+CodesService.Name = "CodesService"
+CodesService.Parent = RemoteServices
+
+local RF = CodesService:FindFirstChild("RF") or Instance.new("Folder")
+RF.Name = "RF"
+RF.Parent = CodesService
+
+local RedeemCode = RF:FindFirstChild("RedeemCode") or Instance.new("RemoteFunction")
+RedeemCode.Name = "RedeemCode"
+RedeemCode.Parent = RF
+
+-- Kode & reward (contoh; ganti reward sesuai game kamu)
+local VALID_CODES = {
+	["40KCCUTHANKS66"] = true,
+	["TOTHEMOON"] = true,
+	["35KCCUTHANKS33"] = true,
+	["LOVETOBRAZIL"] = true,
+	["WWWW"] = true,
+	["30KCCU"] = true,
+	["CLASSREROLL"] = true,
+	["RESETMYSTATS"] = true,
+	["THANKSFORTHELIKESGUYS"] = true,
+	["RELEASE"] = true,
 }
 
--- Fungsi untuk membuat notifikasi
-local function createNotification(title, text, duration, success)
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "NotificationGui"
-    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ScreenGui.Parent = game.CoreGui
+local RedeemedStore = DataStoreService:GetDataStore("RedeemedCodes_v1")
 
-    local NotifFrame = Instance.new("Frame")
-    NotifFrame.Size = UDim2.new(0, 300, 0, 0)
-    NotifFrame.Position = UDim2.new(1, -310, 0, 10)
-    NotifFrame.BackgroundColor3 = success and Color3.fromRGB(40, 40, 45) or Color3.fromRGB(45, 40, 40)
-    NotifFrame.BorderSizePixel = 0
-    NotifFrame.Parent = ScreenGui
+local function getRedeemed(userId)
+	local ok, data = pcall(function()
+		return RedeemedStore:GetAsync(tostring(userId))
+	end)
+	if not ok or type(data) ~= "table" then
+		return {}
+	end
+	return data
+end
 
+local function setRedeemed(userId, redeemedTable)
+	pcall(function()
+		RedeemedStore:SetAsync(tostring(userId), redeemedTable)
+	end)
+end
+
+RedeemCode.OnServerInvoke = function(player, code)
+	if type(code) ~= "string" then
+		return false, "Invalid input"
+	end
+
+	code = code:gsub("%s+", "") -- trim spasi
+
+	if not VALID_CODES[code] then
+		return false, "Code invalid/expired"
+	end
+
+	local redeemed = getRedeemed(player.UserId)
+	if redeemed[code] then
+		return false, "Already redeemed"
+	end
+
+	-- TODO: kasih reward di sini
+	-- contoh: tambah gold, reroll, reset stats, dll
+
+	redeemed[code] = true
+	setRedeemed(player.UserId, redeemed)
+
+	return true, "Redeemed"
+end
     local UICorner = Instance.new("UICorner")
     UICorner.CornerRadius = UDim.new(0, 10)
     UICorner.Parent = NotifFrame
